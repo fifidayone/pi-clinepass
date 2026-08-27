@@ -5,6 +5,10 @@
  * (verified against real usage), not the published reference table which
  * drifts from actual billing. `cacheWrite` is kept at 0: pi's cost model
  * requires the field, but we do not display or track cache-write pricing.
+ *
+ * Context is capped to 921,600 for models whose gateway reports ~1M
+ * (pool max, not single-node) to leave headroom; max output is capped to
+ * 131,072. Models under 1M keep their tested values.
  */
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -15,7 +19,7 @@ export interface ClinePassModel {
   id: string;
   name: string;
   reasoning: boolean;
-  input: readonly ["text"];
+  input: readonly ("text" | "image")[];
   cost: {
     input: number;
     output: number;
@@ -32,10 +36,10 @@ export interface ClinePassModel {
   };
 }
 
-/** All levels supported (off → "none"), minimal unsupported. */
-const FULL_THINKING: ThinkingLevelMap = {
+/** All 7 levels supported (off → "none"). Used when `supportedEfforts: null` + mandatory false. */
+const ALL_THINKING: ThinkingLevelMap = {
   off: "none",
-  minimal: null,
+  minimal: "minimal",
   low: "low",
   medium: "medium",
   high: "high",
@@ -43,10 +47,59 @@ const FULL_THINKING: ThinkingLevelMap = {
   max: "max",
 };
 
-/** ox-alpha requires reasoning upstream: off → null (unsupported). */
-const OX_ALPHA_THINKING: ThinkingLevelMap = {
-  ...FULL_THINKING,
+/** All levels except off (mandatory reasoning). Used when `mandatory: true` + `supportedEfforts: null`. */
+const ALL_MANDATORY: ThinkingLevelMap = {
   off: null,
+  minimal: "minimal",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: "max",
+};
+
+/** Only max/high/low + off. Used for deepseek, glm-5.3, kimi-k3, free models. */
+const MAX_HIGH_LOW: ThinkingLevelMap = {
+  off: "none",
+  minimal: null,
+  low: "low",
+  medium: null,
+  high: "high",
+  xhigh: null,
+  max: "max",
+};
+
+/** Max/high/low but off not allowed (mandatory). */
+const MAX_HIGH_LOW_MANDATORY: ThinkingLevelMap = {
+  off: null,
+  minimal: null,
+  low: "low",
+  medium: null,
+  high: "high",
+  xhigh: null,
+  max: "max",
+};
+
+/** Only xhigh/high + off. Used for glm-5.2. */
+const XHIGH_HIGH: ThinkingLevelMap = {
+  off: "none",
+  minimal: null,
+  low: null,
+  medium: null,
+  high: "high",
+  xhigh: "xhigh",
+  max: null,
+};
+
+/** xhigh/medium/low + off. Used for qwen3.8-max. */
+const XHIGH_MEDIUM_LOW: ThinkingLevelMap = {
+  off: "none",
+  minimal: null,
+  low: "low",
+  medium: "medium",
+  high: null,
+  xhigh: "xhigh",
+  max: null,
 };
 
 /**
@@ -70,13 +123,14 @@ function model(
   cost: [input: number, output: number, cacheRead: number],
   contextWindow: number,
   maxTokens: number,
-  thinkingLevelMap: ThinkingLevelMap = FULL_THINKING,
+  input: readonly ("text" | "image")[] = ["text"],
+  thinkingLevelMap: ThinkingLevelMap = ALL_THINKING,
 ): ClinePassModel {
   return {
     id,
     name,
     reasoning: true,
-    input: ["text"],
+    input,
     cost: { input: cost[0], output: cost[1], cacheRead: cost[2], cacheWrite: 0 },
     contextWindow,
     maxTokens,
@@ -85,26 +139,26 @@ function model(
   };
 }
 
-/** Measured prices ($/1M tokens: input/output/cacheRead). */
+/** Measured prices ($/1M tokens: input/output/cacheRead) — latest verified. */
 export const MODELS: readonly ClinePassModel[] = [
   // ── Free models (Cline free tier, cost 0) ──────────────────────────────
-  model("deepseek/deepseek-v4-flash", "DeepSeek V4 Flash (Cline Free)", [0, 0, 0], 1_024_000, 384_000),
-  model("stealth/ox-alpha", "Ox Alpha (Cline Free)", [0, 0, 0], 1_048_576, 131_072, OX_ALPHA_THINKING),
-  model("poolside/laguna-s-2.1:free", "Poolside Laguna S-2.1 (Cline Free)", [0, 0, 0], 262_144, 32_768),
+  model("deepseek/deepseek-v4-flash", "DeepSeek V4 Flash (Cline Free)", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
+  model("z-ai/glm-5.3-flash", "GLM-5.3 Flash (Cline Free)", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
+  model("poolside/laguna-s-2.1:free", "Poolside Laguna S-2.1 (Cline Free)", [0, 0, 0], 262_144, 131_072, ["text"], ALL_THINKING),
   // ── ClinePass models (measured billing prices) ─────────────────────────
-  model("cline-pass/glm-5.3", "GLM-5.3 (ClinePass)", [1.4, 4.4, 0.26], 1_048_576, 131_072),
-  model("cline-pass/glm-5.2", "GLM-5.2 (ClinePass)", [1.4, 4.4, 0.26], 1_048_576, 262_144),
-  model("cline-pass/kimi-k2.7-code", "Kimi K2.7 Code (ClinePass)", [1.58, 6.67, 0.317], 262_144, 262_144),
-  model("cline-pass/kimi-k2.6", "Kimi K2.6 (ClinePass)", [1.58, 6.67, 0.267], 262_144, 262_144),
-  model("cline-pass/kimi-k3", "Kimi K3 (ClinePass)", [6.0, 30.0, 0.6], 1_048_576, 1_048_576),
-  model("cline-pass/deepseek-v4-pro", "DeepSeek V4 Pro (ClinePass)", [1.65, 4.95, 0.06], 1_024_000, 384_000),
-  model("cline-pass/deepseek-v4-flash", "DeepSeek V4 Flash (ClinePass)", [0.44, 1.32, 0.014], 1_024_000, 384_000),
-  model("cline-pass/mimo-v2.5", "MiMo-V2.5 (ClinePass)", [0.14, 0.28, 0.0028], 1_048_576, 131_072),
-  model("cline-pass/mimo-v2.5-pro", "MiMo-V2.5-Pro (ClinePass)", [0.435, 0.87, 0.0036], 1_048_576, 131_072),
-  model("cline-pass/minimax-m3", "MiniMax M3 (ClinePass)", [0.5, 2.0, 0.1], 524_288, 512_000),
-  model("cline-pass/qwen3.7-plus", "Qwen3.7 Plus (ClinePass)", [0.67, 2.68, 0.067], 1_000_000, 131_072),
-  model("cline-pass/qwen3.7-max", "Qwen3.7 Max (ClinePass)", [4.17, 12.51, 0.83], 1_000_000, 131_072),
-  model("cline-pass/qwen3.8-max", "Qwen3.8 Max (ClinePass)", [2.75, 8.25, 0.344], 1_000_000, 131_072),
+  model("cline-pass/glm-5.3", "GLM-5.3 (ClinePass)", [1.4, 4.4, 0.26], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
+  model("cline-pass/glm-5.2", "GLM-5.2 (ClinePass)", [1.4, 4.4, 0.26], 921_600, 131_072, ["text"], XHIGH_HIGH),
+  model("cline-pass/kimi-k2.7-code", "Kimi K2.7 Code (ClinePass)", [1.58, 6.67, 0.32], 262_144, 131_072, ["text", "image"], ALL_MANDATORY),
+  model("cline-pass/kimi-k2.6", "Kimi K2.6 (ClinePass)", [1.58, 6.67, 0.27], 262_144, 131_072, ["text", "image"], ALL_THINKING),
+  model("cline-pass/kimi-k3", "Kimi K3 (ClinePass)", [6.0, 30.0, 0.6], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
+  model("cline-pass/deepseek-v4-pro", "DeepSeek V4 Pro (ClinePass)", [1.65, 4.95, 0.06], 921_600, 131_072, ["text"], MAX_HIGH_LOW),
+  model("cline-pass/deepseek-v4-flash", "DeepSeek V4 Flash (ClinePass)", [0.44, 1.32, 0.014], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
+  model("cline-pass/mimo-v2.5", "MiMo-V2.5 (ClinePass)", [0.14, 0.28, 0.0028], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("cline-pass/mimo-v2.5-pro", "MiMo-V2.5-Pro (ClinePass)", [0.435, 0.87, 0.0036], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("cline-pass/minimax-m3", "MiniMax M3 (ClinePass)", [0.5, 2.0, 0.1], 921_600, 131_072, ["text", "image"], ALL_THINKING),
+  model("cline-pass/qwen3.7-plus", "Qwen3.7 Plus (ClinePass)", [0.67, 2.67, 0.07], 921_600, 131_072, ["text", "image"], ALL_THINKING),
+  model("cline-pass/qwen3.7-max", "Qwen3.7 Max (ClinePass)", [4.17, 12.5, 0.83], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("cline-pass/qwen3.8-max", "Qwen3.8 Max (ClinePass)", [2.75, 8.25, 0.34], 921_600, 131_072, ["text"], XHIGH_MEDIUM_LOW),
 ];
 
 export function modelIds(): string[] {
@@ -113,5 +167,5 @@ export function modelIds(): string[] {
 
 /** True for the Cline free-tier models (cost 0). */
 export function isFreeModel(id: string): boolean {
-  return id.includes(":free") || id.includes("ox-alpha") || id === "deepseek/deepseek-v4-flash";
+  return id.includes(":free") || id === "z-ai/glm-5.3-flash" || id === "deepseek/deepseek-v4-flash";
 }

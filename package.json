@@ -1,6 +1,6 @@
 {
   "name": "pi-clinepass",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ClinePass provider for pi — static measured-price catalog, server-truth billing meter, free models",
   "keywords": [
     "ai",
@@ -47,6 +47,7 @@
   "pi": {
     "extensions": [
       "./src/index.ts"
-    ]
+    ],
+    "image": "https://raw.githubusercontent.com/fifidayone/pi-clinepass/main/assets/report.png"
   }
 }

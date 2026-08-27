@@ -12,7 +12,7 @@ describe("catalog", () => {
     const kimi = MODELS.find((m) => m.id === "cline-pass/kimi-k2.7-code");
     expect(kimi?.cost.input).toBe(1.58);
     expect(kimi?.cost.output).toBe(6.67);
-    expect(kimi?.cost.cacheRead).toBe(0.317);
+    expect(kimi?.cost.cacheRead).toBe(0.32);
 
     const k3 = MODELS.find((m) => m.id === "cline-pass/kimi-k3");
     expect(k3?.cost.input).toBe(6.0);
@@ -29,7 +29,7 @@ describe("catalog", () => {
   });
 
   it("marks free models correctly", () => {
-    expect(isFreeModel("stealth/ox-alpha")).toBe(true);
+    expect(isFreeModel("z-ai/glm-5.3-flash")).toBe(true);
     expect(isFreeModel("poolside/laguna-s-2.1:free")).toBe(true);
     expect(isFreeModel("deepseek/deepseek-v4-flash")).toBe(true);
     expect(isFreeModel("cline-pass/deepseek-v4-flash")).toBe(false);
@@ -40,12 +40,12 @@ describe("catalog", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("ox-alpha disables off thinking; others map off → none", () => {
-    const ox = MODELS.find((m) => m.id === "stealth/ox-alpha");
-    expect(ox?.thinkingLevelMap.off).toBeNull();
-    const glm = MODELS.find((m) => m.id === "cline-pass/glm-5.3");
-    expect(glm?.thinkingLevelMap.off).toBe("none");
-    expect(glm?.thinkingLevelMap.max).toBe("max");
+  it("glm-5.3-flash disables off thinking; others map off → none", () => {
+    const flash = MODELS.find((m) => m.id === "z-ai/glm-5.3-flash");
+    expect(flash?.thinkingLevelMap.off).toBeNull();
+    const plus = MODELS.find((m) => m.id === "cline-pass/qwen3.7-plus");
+    expect(plus?.thinkingLevelMap.off).toBe("none");
+    expect(plus?.thinkingLevelMap.max).toBe("max");
   });
 
   it("sets ClinePass compat on every model", () => {
