@@ -39,6 +39,20 @@ export function ensureWorkosPrefix(token: string): string {
   return isWorkosToken(token) ? token : `${WORKOS_TOKEN_PREFIX}${token}`;
 }
 
+/**
+ * Make server-provided error text safe to embed in Error messages that end up
+ * on the user's terminal: strip control characters (incl. ANSI escapes),
+ * collapse whitespace, cap the length. Keeps debuggability, drops the
+ * terminal-injection surface.
+ */
+export function sanitizeErrorText(text: string, maxLength = 200): string {
+  return text
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
 export interface ClineAuthCredentials {
   accessToken: string;
   refreshToken: string;
@@ -88,7 +102,7 @@ export async function refreshWorkosToken(
 
   if (!response.ok) {
     const text = await response.text().catch(() => "unknown error");
-    throw new Error(`ClinePass token refresh failed (${response.status}): ${text}`);
+    throw new Error(`ClinePass token refresh failed (${response.status}): ${sanitizeErrorText(text)}`);
   }
 
   const data = (await response.json()) as {
@@ -133,7 +147,7 @@ export async function startDeviceAuthorization(
   };
   if (!response.ok || !data.device_code || !data.user_code || !data.verification_uri) {
     throw new Error(
-      `Cline device authorization failed: ${data.error_description ?? data.error ?? response.statusText}`,
+      `Cline device authorization failed: ${sanitizeErrorText(data.error_description ?? data.error ?? response.statusText)}`,
     );
   }
   return {
@@ -184,7 +198,7 @@ export async function pollDeviceAuthorization(
       continue;
     }
     throw new Error(
-      `Cline device authorization failed: ${data.error_description ?? data.error ?? response.statusText}`,
+      `Cline device authorization failed: ${sanitizeErrorText(data.error_description ?? data.error ?? response.statusText)}`,
     );
   }
   throw new Error("Cline device authorization timed out");
@@ -204,7 +218,7 @@ export async function registerWorkOSTokens(
   });
   if (!response.ok) {
     const text = await response.text().catch(() => "unknown error");
-    throw new Error(`Cline token registration failed (${response.status}): ${text}`);
+    throw new Error(`Cline token registration failed (${response.status}): ${sanitizeErrorText(text)}`);
   }
   const payload = (await response.json()) as {
     success?: boolean;

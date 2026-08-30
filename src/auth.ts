@@ -178,7 +178,10 @@ export function resolvePiStoredCredential(options: AuthOptions = {}): ClineAuthC
  * produced rotated tokens — if the server rotates single-use refresh
  * tokens, discarding the new one would leave pi's stored credential dead
  * and force a re-login. Waits for pi's lock file (`<auth.json>.lock`, held
- * by proper-lockfile while pi writes) to clear before merging.
+ * by proper-lockfile while pi writes) to clear before merging, then verifies
+ * after writing: the meter refresh and pi's own chat-path refresh can fire at
+ * the same near-expiry moment, so if pi rewrote the file in between, the
+ * merge is redone once on top of the newer content instead of dropping it.
  */
 export async function persistOAuthCredential(
   credential: OAuthCredentials,
@@ -187,26 +190,35 @@ export async function persistOAuthCredential(
   const { homeDir, readFile, fileExists, writeFile } = resolveOptions(options);
   const authPath = join(homeDir(), ".pi", "agent", "auth.json");
   const lockPath = `${authPath}.lock`;
-
-  for (let attempt = 0; attempt < 20 && fileExists(lockPath); attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  const current = fileExists(authPath) ? readFile(authPath) : "{}";
-  const parsed: unknown = current.trim() ? JSON.parse(current) : {};
-  if (!isRecord(parsed)) {
-    throw new Error("auth.json is not a JSON object");
-  }
-  const next = {
-    ...parsed,
-    clinepass: {
-      type: "oauth",
-      access: credential.access,
-      refresh: credential.refresh,
-      expires: credential.expires,
-    },
+  const entry = {
+    type: "oauth",
+    access: credential.access,
+    refresh: credential.refresh,
+    expires: credential.expires,
   };
-  writeFile(authPath, JSON.stringify(next, null, 2));
+
+  for (let pass = 0; pass < 2; pass++) {
+    for (let attempt = 0; attempt < 20 && fileExists(lockPath); attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    const current = fileExists(authPath) ? readFile(authPath) : "{}";
+    const parsed: unknown = current.trim() ? JSON.parse(current) : {};
+    if (!isRecord(parsed)) {
+      throw new Error("auth.json is not a JSON object");
+    }
+    const serialized = JSON.stringify({ ...parsed, clinepass: entry }, null, 2);
+    writeFile(authPath, serialized);
+
+    let contended = false;
+    for (let attempt = 0; attempt < 20 && fileExists(lockPath); attempt++) {
+      contended = true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    // Done only when pi never contended and the file still holds exactly what
+    // we wrote; otherwise loop once more and merge over the newer content.
+    if (!contended && (!fileExists(authPath) || readFile(authPath) === serialized)) return;
+  }
 }
 
 // ─── Login chain ──────────────────────────────────────────────────────────

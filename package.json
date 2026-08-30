@@ -1,7 +1,7 @@
 {
   "name": "pi-clinepass",
-  "version": "0.1.1",
-  "description": "ClinePass provider for pi — static measured-price catalog, server-truth billing meter, free models",
+  "version": "0.1.2",
+  "description": "ClinePass for pi — static measured-price catalog, server-truth billing meter, free models",
   "keywords": [
     "ai",
     "cline",
@@ -37,7 +37,8 @@
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",

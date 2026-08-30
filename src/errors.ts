@@ -2,13 +2,13 @@
  * ClinePass error classification — maps provider error text to friendly,
  * actionable messages surfaced through pi's UI.
  *
- * Classification order matters: the free-model route returns plain
- * `403 Forbidden` when its Cline-CLI header gate rejects us, which must not
+ * Classification order matters: the free-model routes return plain
+ * `403 Forbidden` when their Cline-CLI header gate rejects us, which must not
  * be reported as a subscription problem, and free-limit errors may arrive
  * wrapped in a generic 403/429 shell.
  */
 
-import { isFreeDeepSeekModel } from "./headers.js";
+import { isFreeModel } from "./catalog.js";
 
 export type ClinePassErrorType =
   | "not_subscribed"
@@ -33,15 +33,15 @@ export const CLINEPASS_ERROR_MESSAGES: Record<ClinePassErrorType, string> = {
   free_limit_reached:
     "Free model rate limit reached. Please wait a few moments and try again.",
   free_route_forbidden:
-    "Free model route unavailable (HTTP 403). The free DeepSeek route is gated to Cline product " +
+    "Free model route unavailable (HTTP 403). The free route is gated to Cline product " +
     "surfaces — retry in a moment, or switch to a ClinePass model.",
   unknown: "ClinePass request failed. Check your subscription at app.cline.bot or run `pi /login`.",
 };
 
 /**
  * Classify a provider error string. `modelId` (the model of the failed
- * request, e.g. "deepseek/deepseek-v4-flash") disambiguates 403s on the
- * free route from subscription problems.
+ * request, e.g. "deepseek/deepseek-v4-flash") disambiguates 403s on free
+ * routes from subscription problems.
  */
 export function classifyClinePassError(
   errorMessage: string,
@@ -70,7 +70,9 @@ export function classifyClinePassError(
       "organization accounts cannot use",
     ])
   ) {
-    if (modelId && isFreeDeepSeekModel(modelId)) {
+    // Every free-tier route is gated to Cline product surfaces — a 403 on a
+    // free model is a route-gate rejection, not a subscription problem.
+    if (modelId && isFreeModel(modelId)) {
       return { type: "free_route_forbidden", message: CLINEPASS_ERROR_MESSAGES.free_route_forbidden };
     }
     return { type: "not_subscribed", message: CLINEPASS_ERROR_MESSAGES.not_subscribed };

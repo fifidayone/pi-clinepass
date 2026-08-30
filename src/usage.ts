@@ -19,7 +19,8 @@ import {
   refreshWorkosToken,
   type ClineAuthCredentials,
 } from "./workos.js";
-import { isFreeModel, MODELS } from "./catalog.js";
+import { isFreeModel, type ClinePassModel } from "./catalog.js";
+import { getEffectiveModels } from "./pricing.js";
 import {
   persistOAuthCredential,
   resolvePiStoredCredential,
@@ -30,6 +31,8 @@ export const PROVIDER_NAME = "clinepass";
 
 export interface UsageRecord {
   id: string;
+  /** The gateway request id — exact correlation key for probe matching. */
+  generationId?: string;
   model: string;
   promptTokens: number;
   cachedTokens: number;
@@ -60,6 +63,10 @@ const TRACKING_SCAN_LIMIT = 5;
 const FETCH_TIMEOUT_MS = 15_000;
 /** A record created this long before the turn started is not this turn's. */
 const STALE_RECORD_SKEW_MS = 2 * 60 * 1000;
+/** A record created more than this long after the turn ended belongs to a
+ * later turn (or another concurrent window), never to this one — the slack
+ * only covers server/client clock skew. */
+const FUTURE_RECORD_SKEW_MS = 10 * 1000;
 /** Poll attempts for the server to flush the turn's usage record. */
 const TRACKING_POLL_ATTEMPTS = 3;
 const TRACKING_POLL_INTERVAL_MS = 400;
@@ -243,9 +250,10 @@ export async function fetchUsageRecords(
       const rawCostUsd = numberValue(item.costUsd) ?? 0;
       return {
         id: stringValue(item.id) ?? "",
+        generationId: stringValue(item.generationId),
         // The API's `aiModelName` is bare (e.g. "deepseek-v4-flash"); the
         // catalog/message ids carry the vendor path ("deepseek/deepseek-v4-flash")
-        // so normalize with `metadata.rawModel` when present.
+        // so normalize with `metadata.raw_model` when present.
         model: normalizeRecordModel(item),
         promptTokens,
         cachedTokens,
@@ -259,10 +267,11 @@ export async function fetchUsageRecords(
 }
 
 /**
- * Fetch rolling plan limits: percent used (5h/weekly/monthly) plus the real
- * cap thresholds from the plan entitlements (micro-units → USD). Limit
- * amounts are `undefined` when the plan exposes no cap entitlement — no
- * invented fallback numbers.
+ * Rolling plan limits for the meter and the /clinepass report: percent used
+ * (5h/weekly/monthly) plus the real cap thresholds from the plan
+ * entitlements (micro-units → USD). Read live from the API on every call —
+ * no caching. Limit amounts are `undefined` when the plan exposes no cap
+ * entitlement — no invented fallback numbers.
  */
 export async function fetchPlanLimits(options: UsageOptions = {}): Promise<PlanLimits | undefined> {
   const [limitsJson, planJson] = await Promise.all([
@@ -428,13 +437,23 @@ export function handleUsageTracking(
   // Extract everything from the event synchronously — the event object may
   // be reused after this handler returns.
   const msg = isRecord(event.message) ? event.message : undefined;
-  if (!msg || msg.role !== "assistant") return Promise.resolve();
+  if (!msg) return Promise.resolve();
+  // A user message marks the turn boundary: reset the per-turn accumulator.
+  if (msg.role === "user") {
+    turnCostMu = 0;
+    return Promise.resolve();
+  }
+  if (msg.role !== "assistant") return Promise.resolve();
 
   const provider = typeof msg.provider === "string" ? msg.provider : ctx.model?.provider;
   if (provider !== PROVIDER_NAME && provider !== "cline-pass") return Promise.resolve();
 
   const rawModelId = typeof msg.model === "string" ? msg.model : ctx.model?.id ?? "";
   const modelId = rawModelId.toLowerCase();
+  if (trackingPaused) {
+    clearMeter(ctx);
+    return Promise.resolve();
+  }
   if (isFreeModel(modelId)) {
     clearMeter(ctx);
     return Promise.resolve();
@@ -457,6 +476,29 @@ export function handleUsageTracking(
 let trackingQueue: Promise<void> = Promise.resolve();
 /** Newest usage-record id seen/adopted; records at or before it are old news. */
 let lastSeenUsageId: string | undefined;
+/** Running cost of the current turn (micro-$): every adopted record adds in,
+ * so "Turn:" reflects the whole turn including tool-calling rounds. */
+let turnCostMu = 0;
+
+let trackingPaused = false;
+
+/**
+ * Suspend meter tracking while price calibration runs: probe records hit the
+ * same /usages feed with the same model ids, so the meter must not adopt them
+ * as session spend. Resumed by `reseedUsageBaseline` after calibration.
+ */
+export function setUsageTrackingPaused(paused: boolean): void {
+  trackingPaused = paused;
+}
+
+/**
+ * Drop the tracking baseline and re-seed from the newest /usages record —
+ * called after calibration so probe spend can never be adopted by later turns.
+ */
+export async function reseedUsageBaseline(options: UsageOptions = {}): Promise<void> {
+  lastSeenUsageId = undefined;
+  await seedUsageBaseline(options);
+}
 
 async function trackUsage(
   info: { modelId: string; turnStartMs: number },
@@ -489,8 +531,9 @@ async function trackUsage(
       scheduleLateRecord(info, ctx, writeEntry, options);
       return;
     }
+    turnCostMu += Math.round(usage.costUsd * 1e8);
     writeEntry(usage);
-    await updateMeter(usage, ctx, options);
+    await updateMeter(ctx, options);
   } catch {
     // Billing tracking is best-effort; never let it crash the turn.
   }
@@ -501,8 +544,17 @@ function recordCreatedMs(record: UsageRecord): number {
   return Number.isNaN(ms) ? Date.now() : ms;
 }
 
-function isStaleRecord(record: UsageRecord, turnStartMs: number): boolean {
-  return recordCreatedMs(record) < turnStartMs - STALE_RECORD_SKEW_MS;
+/**
+ * A record is foreign to this turn when it sits outside the freshness window:
+ * created well before the turn started (an earlier session/turn) or created
+ * after it ended beyond clock-skew slack (a later turn / concurrent window).
+ */
+function isForeignRecord(record: UsageRecord, turnStartMs: number): boolean {
+  const created = recordCreatedMs(record);
+  return (
+    created < turnStartMs - STALE_RECORD_SKEW_MS ||
+    created > turnStartMs + FUTURE_RECORD_SKEW_MS
+  );
 }
 
 /**
@@ -511,14 +563,15 @@ function isStaleRecord(record: UsageRecord, turnStartMs: number): boolean {
  * normalizeRecordModel). Only the free deepseek route differs, and it is
  * skipped before matching.
  */
-function modelsMatch(recordModel: string, modelId: string): boolean {
+export function modelsMatch(recordModel: string, modelId: string): boolean {
   return recordModel.toLowerCase() === modelId.toLowerCase();
 }
 
 /**
  * Pick this turn's usage record from the newest-first `records` list.
- * A record is adopted only when it is unseen, fresh (created within the
- * staleness window around this turn), and billed for the same model —
+ * A record is adopted only when it is unseen, fresh (created inside the
+ * freshness window around this turn — clock-skew slack on both sides), and
+ * billed for the same model —
  * so stale records from earlier sessions and foreign-model records on the
  * same account are never misattributed. Mutates the module baseline.
  */
@@ -529,7 +582,7 @@ export function adoptUsageRecord(
 ): UsageRecord | undefined {
   for (const record of records) {
     if (record.id === lastSeenUsageId) return undefined; // reached seen territory
-    if (isStaleRecord(record, turnStartMs)) continue;
+    if (isForeignRecord(record, turnStartMs)) continue;
     if (modelId && record.model && !modelsMatch(record.model, modelId)) continue;
     lastSeenUsageId = record.id;
     return record;
@@ -577,16 +630,18 @@ function scheduleLateRecord(
     if (!records || records.length === 0) return;
     const late = adoptUsageRecord(records, info.turnStartMs, info.modelId);
     if (!late) return;
+    turnCostMu += Math.round(late.costUsd * 1e8);
     writeEntry(late);
-    await updateMeter(late, ctx, options);
+    await updateMeter(ctx, options);
   };
   void run(3000).catch(() => {});
   void run(8000).catch(() => {});
 }
 
-async function updateMeter(usage: UsageRecord, ctx: MeterContext, options: UsageOptions): Promise<void> {
+async function updateMeter(ctx: MeterContext, options: UsageOptions): Promise<void> {
   const sessionTotal = sumSessionEntries(ctx.sessionManager);
-  if (usage.costUsd === 0 && sessionTotal === 0) {
+  const turnTotal = turnCostMu / 1e8;
+  if (turnTotal === 0 && sessionTotal === 0) {
     clearMeter(ctx);
     return;
   }
@@ -596,7 +651,7 @@ async function updateMeter(usage: UsageRecord, ctx: MeterContext, options: Usage
     ? ` | 5h: ${formatLimitSegment(limits.fiveHour.usedPercent, limits.fiveHour.resetsAt)}`
     : "";
   const text = meterBox(
-    `Turn: $${usage.costUsd.toFixed(5)} · ${c.dim(`Session: $${sessionTotal.toFixed(5)}`)}${limitSeg}`,
+    `Turn: $${turnTotal.toFixed(5)} · ${c.dim(`Session: $${sessionTotal.toFixed(5)}`)}${limitSeg}`,
   );
   try {
     ctx.ui?.setStatus?.("clinepass-cost", text);
@@ -654,15 +709,16 @@ export function resetUsageTrackingForTest(): void {
   lastSeenUsageId = undefined;
   seedingBaseline = false;
   trackingQueue = Promise.resolve();
+  trackingPaused = false;
+  turnCostMu = 0;
 }
 
 // ─── /clinepass report ────────────────────────────────────────────────────
 
-/** Clean display name for the report: strip "(ClinePass)" / "(Cline Free)". */
-function reportName(m: (typeof MODELS)[number]): string {
-  return m.name
-    .replace(" (ClinePass)", "")
-    .replace(" (Cline Free)", " (Free)");
+/** Clean display name for the report: plain catalog names (no badge — the
+ * report's own columns carry the numbers). */
+function reportName(m: ClinePassModel): string {
+  return m.name;
 }
 
 function formatResetDate(iso?: string): string {
@@ -682,32 +738,83 @@ function formatResetDateWithDate(iso?: string): string {
 }
 
 function formatExpiryDate(iso?: string): string {
-  if (!iso) return "";
+  const p = formatExpiryParts(iso);
+  return `${p.suffix} (${p.remaining})${p.warn ? c.yellow(p.warn) : ""}`;
+}
+
+/** Expiry split into pieces — the meter block arranges them on separate
+ * lines; the classic report composes one line. */
+interface ExpiryParts {
+  /** " • Active until Aug 30, 2026 02:14 PM" */
+  suffix: string;
+  /** "2h remaining" */
+  remaining: string;
+  /** " - ⚠︎ Expiring soon!" — only when expiring within 3 days */
+  warn: string;
+}
+
+function formatExpiryParts(iso?: string): ExpiryParts {
+  if (!iso) return { suffix: "", remaining: "", warn: "" };
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  const diffDays = Math.max(0, Math.round((d.getTime() - Date.now()) / (24 * 3600 * 1000)));
+  if (Number.isNaN(d.getTime())) return { suffix: "", remaining: "", warn: "" };
+  const remainingMs = d.getTime() - Date.now();
   const dateStr = d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
   const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const isExpiringSoon = diffDays <= 3;
-  const warnTag = isExpiringSoon ? c.yellow(` - ${WARN} Expiring soon!`) : "";
-  return ` • Active until ${dateStr} ${timeStr} (${diffDays}d remaining)${warnTag}`;
+  let remaining: string;
+  if (remainingMs <= 0) {
+    remaining = "expired";
+  } else if (remainingMs < 3_600_000) {
+    remaining = `${Math.max(1, Math.round(remainingMs / 60_000))}m remaining`;
+  } else if (remainingMs < 86_400_000) {
+    remaining = `${Math.floor(remainingMs / 3_600_000)}h remaining`;
+  } else {
+    remaining = `${Math.floor(remainingMs / 86_400_000)}d remaining`;
+  }
+  const isExpiringSoon = remainingMs <= 3 * 86_400_000;
+  const warn = isExpiringSoon ? ` - ${WARN} Expiring soon!` : "";
+  return { suffix: ` • Active until ${dateStr} ${timeStr}`, remaining, warn };
 }
 
 function formatLimitUsd(value: number | undefined): string {
   return value === undefined ? "n/a" : `$${value.toFixed(2)}`;
 }
 
-/** Generate the formatted /clinepass report: price table + plan limits. */
-export async function getCapReport(options: UsageOptions = {}): Promise<string> {
-  const limits = await fetchPlanLimits(options);
-  if (!limits) {
-    return `${WARN} [ClinePass] Unable to retrieve plan limits. Please ensure you are logged in via \`pi /login\`.`;
-  }
+/** Structured pieces of the /clinepass report — the two-column view composes
+ * these; `getCapReport` renders the same data as one classic string. */
 
-  const priceRows = MODELS.map((m) => {
-    const cost = m.cost;
-    return `${reportName(m).padEnd(34)}${formatUsd(cost.input).padStart(9)}${formatUsd(cost.output).padStart(9)}${formatUsd(cost.cacheRead).padStart(9)}`;
-  });
+export interface CapReportData {
+  title: string;
+  priceHeader: string;
+  /** Price table rows, free tier first, free/paid divider included. */
+  priceRows: string[];
+  /** Full-width plan + limit rows (classic layout). */
+  planRows: string[];
+  /** The meter block — plan + expiry + limit bars, original formats. */
+  meter: string[];
+  /** The price table's exact width (header/rows/dividers all match it). */
+  priceTableW: number;
+}
+
+function buildCapReportData(limits: PlanLimits): CapReportData {
+  const effective = getEffectiveModels();
+  const free = effective.filter((m) => m.cost.input === 0);
+  const paid = effective.filter((m) => m.cost.input > 0);
+  // The name column must fit the longest row — names exceed 20 chars (e.g.
+  // "DeepSeek V4 Flash (free)" is 24) and a hardcoded 47-wide table would
+  // truncate those rows and cut off the cache-read column.
+  const nameW = Math.max(
+    20,
+    ...[...free.map((m) => reportName(m) + " (free)"), ...paid.map((m) => reportName(m))].map((s) => s.length),
+  );
+  const priceTableW = nameW + 9 + 9 + 9;
+  // Free tier on top, divider, then paid — "(free)" marks the free rows.
+  const priceRow = (m: ClinePassModel, suffix = ""): string =>
+    `${(reportName(m) + suffix).padEnd(nameW)}${formatUsd(m.cost.input).padStart(9)}${formatUsd(m.cost.output).padStart(9)}${formatUsd(m.cost.cacheRead).padStart(9)}`;
+  const priceRows = [
+    ...free.map((m) => priceRow(m, " (free)")),
+    "-".repeat(priceTableW),
+    ...paid.map((m) => priceRow(m)),
+  ];
 
   const reset5h = formatResetDate(limits.fiveHour.resetsAt);
   const reset7d = formatResetDateWithDate(limits.sevenDay.resetsAt);
@@ -726,18 +833,63 @@ export async function getCapReport(options: UsageOptions = {}): Promise<string> 
   const pct7d = col7d(`${limits.sevenDay.usedPercent}%`.padStart(4, " "));
   const pct30d = col30d(`${limits.thirtyDay.usedPercent}%`.padStart(4, " "));
 
-  return [
-    CLEAR + c.bold("ClinePass Model Rates ($ / 1M tokens)"),
-    "",
-    c.bold("MODEL".padEnd(34) + "INPUT".padStart(9) + "OUTPUT".padStart(9) + "CACHE-R".padStart(9)),
-    "-".repeat(61),
-    ...priceRows,
-    "-".repeat(61),
-    "",
-    `${c.bold(limits.planName ?? "Cline Pass")}${expiryInfo}`,
+  const planName = c.bold(limits.planName ?? "Cline Pass");
+  const planRows = [
+    `${planName}${expiryInfo}`,
     "-".repeat(71),
     `5-Hour Limit  (${formatLimitUsd(limits.fiveHour.limitUsd)}) : ${bar5h} ${pct5h}${reset5h}`,
     `Weekly Limit  (${formatLimitUsd(limits.sevenDay.limitUsd)}) : ${bar7d} ${pct7d}${reset7d}`,
     `Monthly Limit (${formatLimitUsd(limits.thirtyDay.limitUsd)}) : ${bar30d} ${pct30d}${reset30d}`,
+  ];
+
+  // The meter block, original formats minus the redundant "Limit" word and
+  // with breathing room between rows — it is the primary read of the modal.
+  const expiry = formatExpiryParts(limits.currentPeriodEnd);
+  const meterBar = (label: string, limitUsd: number | undefined, bar: string, pct: string, reset: string): string =>
+    `${label.padEnd(8)}(${formatLimitUsd(limitUsd)}) : ${bar} ${pct}${reset}`;
+  const meter = [
+    `${planName} ${expiry.remaining ? c.yellow(`(${expiry.remaining})`) : ""}${expiry.warn ? c.yellow(expiry.warn) : ""}`,
+    c.dim(expiry.suffix.trim()),
+    "",
+    meterBar("5-Hour", limits.fiveHour.limitUsd, bar5h, pct5h, reset5h),
+    "",
+    meterBar("Weekly", limits.sevenDay.limitUsd, bar7d, pct7d, reset7d),
+    "",
+    meterBar("Monthly", limits.thirtyDay.limitUsd, bar30d, pct30d, reset30d),
+  ];
+
+  return {
+    title: c.bold("ClinePass Model Rates ($ / 1M tokens)"),
+    priceHeader: c.bold("MODEL".padEnd(nameW) + "INPUT".padStart(9) + "OUTPUT".padStart(9) + "CACHE-R".padStart(9)),
+    priceRows,
+    planRows,
+    meter,
+    priceTableW,
+  };
+}
+
+/** Structured report data for the dashboard view; a string return is the
+ * error message (not logged in / API unreachable). */
+export async function getCapReportData(options: UsageOptions = {}): Promise<CapReportData | string> {
+  const limits = await fetchPlanLimits(options);
+  if (!limits) {
+    return `${WARN} [ClinePass] Unable to retrieve plan limits. Please ensure you are logged in via \`pi /login\`.`;
+  }
+  return buildCapReportData(limits);
+}
+
+/** The classic one-string report (headless mode and notifications). */
+export async function getCapReport(options: UsageOptions = {}): Promise<string> {
+  const result = await getCapReportData(options);
+  if (typeof result === "string") return result;
+  return [
+    CLEAR + result.title,
+    "",
+    result.priceHeader,
+    "-".repeat(result.priceTableW),
+    ...result.priceRows,
+    "-".repeat(result.priceTableW),
+    "",
+    ...result.planRows,
   ].join("\n");
 }

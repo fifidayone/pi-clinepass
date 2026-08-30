@@ -2,7 +2,7 @@
 
 # pi-clinepass
 
-**ClinePass provider for [pi](https://pi.dev) coding agent**
+**ClinePass for [pi](https://pi.dev) coding agent**
 
 Dollar-based limits, live cost tracking, and plan cap reporting.
 
@@ -25,9 +25,10 @@ Dollar-based limits, live cost tracking, and plan cap reporting.
 
 ## Highlights
 
-- **16 Models**: 13 ClinePass models on a dollar-based limit system plus 3 free tier models
+- **18 Models**: 14 ClinePass models on a dollar-based limit system plus 4 free tier models
 - **Live Status Meter**: Per-turn and session cost directly in the pi footer
 - **Plan Utilization**: 5-hour, weekly, and monthly caps tracked via `/clinepass`
+- **Price Calibration**: measure real gateway billing from `/clinepass` to keep displayed prices honest
 - **Simple Auth**: One-time login via Cline CLI, browser, or API key
 
 ---
@@ -68,7 +69,7 @@ Select **ClinePass** to choose your sign-in method:
 
 ### 2. Select a Model
 
-Pick any model using the interactive selector:
+Pick any model using the interactive selector — prices are shown right in the picker:
 
 ```
 /model
@@ -83,6 +84,10 @@ View the live rate sheet and plan limit utilization anytime:
 ```
 /clinepass
 ```
+
+The command opens a menu: the dashboard shows model rates and plan utilization
+in a centered modal, or run **price calibration** to measure real gateway
+billing and update the whole panel (uses ~5-10% of the 5-hour quota).
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/fifidayone/pi-clinepass/main/assets/report.png" alt="ClinePass report with pricing and plan limits" width="620">

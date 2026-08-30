@@ -142,30 +142,33 @@ function model(
 /** Measured prices ($/1M tokens: input/output/cacheRead) — latest verified. */
 export const MODELS: readonly ClinePassModel[] = [
   // ── Free models (Cline free tier, cost 0) ──────────────────────────────
-  model("deepseek/deepseek-v4-flash", "DeepSeek V4 Flash (Cline Free)", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
-  model("z-ai/glm-5.3-flash", "GLM-5.3 Flash (Cline Free)", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
-  model("poolside/laguna-s-2.1:free", "Poolside Laguna S-2.1 (Cline Free)", [0, 0, 0], 262_144, 131_072, ["text"], ALL_THINKING),
+  model("cline-free/longcat-2.0", "LongCat 2.0", [0, 0, 0], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("z-ai/glm-5.3-flash", "GLM-5.3 Flash", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
+  model("deepseek/deepseek-v4-flash", "DeepSeek V4 Flash", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
+  model("poolside/laguna-s-2.1:free", "Laguna S-2.1", [0, 0, 0], 262_144, 131_072, ["text"], ALL_THINKING),
   // ── ClinePass models (measured billing prices) ─────────────────────────
-  model("cline-pass/glm-5.3", "GLM-5.3 (ClinePass)", [1.4, 4.4, 0.26], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
-  model("cline-pass/glm-5.2", "GLM-5.2 (ClinePass)", [1.4, 4.4, 0.26], 921_600, 131_072, ["text"], XHIGH_HIGH),
-  model("cline-pass/kimi-k2.7-code", "Kimi K2.7 Code (ClinePass)", [1.58, 6.67, 0.32], 262_144, 131_072, ["text", "image"], ALL_MANDATORY),
-  model("cline-pass/kimi-k2.6", "Kimi K2.6 (ClinePass)", [1.58, 6.67, 0.27], 262_144, 131_072, ["text", "image"], ALL_THINKING),
-  model("cline-pass/kimi-k3", "Kimi K3 (ClinePass)", [6.0, 30.0, 0.6], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
-  model("cline-pass/deepseek-v4-pro", "DeepSeek V4 Pro (ClinePass)", [1.65, 4.95, 0.06], 921_600, 131_072, ["text"], MAX_HIGH_LOW),
-  model("cline-pass/deepseek-v4-flash", "DeepSeek V4 Flash (ClinePass)", [0.44, 1.32, 0.014], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
-  model("cline-pass/mimo-v2.5", "MiMo-V2.5 (ClinePass)", [0.14, 0.28, 0.0028], 921_600, 131_072, ["text"], ALL_THINKING),
-  model("cline-pass/mimo-v2.5-pro", "MiMo-V2.5-Pro (ClinePass)", [0.435, 0.87, 0.0036], 921_600, 131_072, ["text"], ALL_THINKING),
-  model("cline-pass/minimax-m3", "MiniMax M3 (ClinePass)", [0.5, 2.0, 0.1], 921_600, 131_072, ["text", "image"], ALL_THINKING),
-  model("cline-pass/qwen3.7-plus", "Qwen3.7 Plus (ClinePass)", [0.67, 2.67, 0.07], 921_600, 131_072, ["text", "image"], ALL_THINKING),
-  model("cline-pass/qwen3.7-max", "Qwen3.7 Max (ClinePass)", [4.17, 12.5, 0.83], 921_600, 131_072, ["text"], ALL_THINKING),
-  model("cline-pass/qwen3.8-max", "Qwen3.8 Max (ClinePass)", [2.75, 8.25, 0.34], 921_600, 131_072, ["text"], XHIGH_MEDIUM_LOW),
+  model("cline-pass/glm-5.3-flash", "GLM-5.3 Flash", [0.15, 0.5, 0.03], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
+  model("cline-pass/glm-5.3", "GLM-5.3", [1.4, 4.4, 0.26], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
+  model("cline-pass/glm-5.2", "GLM-5.2", [1.4, 4.4, 0.26], 921_600, 131_072, ["text"], XHIGH_HIGH),
+  model("cline-pass/kimi-k2.7-code", "Kimi K2.7 Code", [1.58, 6.67, 0.32], 262_144, 131_072, ["text", "image"], ALL_MANDATORY),
+  model("cline-pass/kimi-k2.6", "Kimi K2.6", [1.58, 6.67, 0.27], 262_144, 131_072, ["text", "image"], ALL_THINKING),
+  model("cline-pass/kimi-k3", "Kimi K3", [6.0, 30.0, 0.6], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
+  model("cline-pass/deepseek-v4-pro", "DeepSeek V4 Pro", [1.65, 4.95, 0.06], 921_600, 131_072, ["text"], MAX_HIGH_LOW),
+  model("cline-pass/deepseek-v4-flash", "DeepSeek V4 Flash", [0.44, 1.32, 0.014], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
+  model("cline-pass/mimo-v2.5", "MiMo-V2.5", [0.14, 0.28, 0.0028], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("cline-pass/mimo-v2.5-pro", "MiMo-V2.5-Pro", [0.435, 0.87, 0.0036], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("cline-pass/minimax-m3", "MiniMax M3", [0.5, 2.0, 0.1], 921_600, 131_072, ["text", "image"], ALL_THINKING),
+  model("cline-pass/qwen3.7-plus", "Qwen3.7 Plus", [0.67, 2.67, 0.07], 921_600, 131_072, ["text", "image"], ALL_THINKING),
+  model("cline-pass/qwen3.7-max", "Qwen3.7 Max", [4.17, 12.5, 0.83], 921_600, 131_072, ["text"], ALL_THINKING),
+  model("cline-pass/qwen3.8-max", "Qwen3.8 Max", [2.75, 8.25, 0.34], 921_600, 131_072, ["text"], XHIGH_MEDIUM_LOW),
 ];
 
 export function modelIds(): string[] {
   return MODELS.map((m) => m.id);
 }
 
-/** True for the Cline free-tier models (cost 0). */
+/** True for the Cline free-tier models — derived from the catalog itself
+ * (cost 0), so adding a free model never needs a second edit here. */
 export function isFreeModel(id: string): boolean {
-  return id.includes(":free") || id === "z-ai/glm-5.3-flash" || id === "deepseek/deepseek-v4-flash";
+  return MODELS.some((m) => m.id === id && m.cost.input === 0);
 }

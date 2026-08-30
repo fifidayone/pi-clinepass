@@ -4,6 +4,7 @@ import {
   isWorkosToken,
   pollDeviceAuthorization,
   refreshWorkosToken,
+  sanitizeErrorText,
 } from "../src/workos.js";
 
 describe("workos", () => {
@@ -46,6 +47,22 @@ describe("workos", () => {
         { fetch: fetchMock },
       ),
     ).rejects.toThrow(/refresh failed/);
+  });
+
+  it("embeds sanitized server text in refresh failures (no control chars, capped)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("oops\r\n\u001b[2J wiped", { status: 500 }));
+    await expect(
+      refreshWorkosToken(
+        { access: "workos:old", refresh: "rt", expires: 0 },
+        { fetch: fetchMock },
+      ),
+    ).rejects.toThrow("oops [2J wiped");
+  });
+
+  it("sanitizes error text: strips control chars, collapses whitespace, caps length", () => {
+    expect(sanitizeErrorText("boom\r\n\u001b[31mred\u001b[0m")).toBe("boom [31mred [0m");
+    expect(sanitizeErrorText("x".repeat(300))).toHaveLength(200);
+    expect(sanitizeErrorText("  clean   text ")).toBe("clean text");
   });
 
   it("honors slow_down by backing off before polling again (RFC 8628)", async () => {

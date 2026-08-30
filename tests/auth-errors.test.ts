@@ -53,6 +53,35 @@ describe("persistOAuthCredential", () => {
     const saved = JSON.parse(files[AUTH_JSON]);
     expect(saved.clinepass).toEqual({ type: "oauth", access: "workos:new", refresh: "new-rt", expires: 42 });
   });
+
+  it("redoes the merge when pi rewrites auth.json during persist (lost update)", async () => {
+    const files: Record<string, string> = {
+      [AUTH_JSON]: JSON.stringify({ anthropic: { type: "api_key", key: "sk-keep" } }),
+    };
+    const base = makeFs(files);
+    let simulated = false;
+    const fs = {
+      ...base,
+      writeFile: (p: string, d: string) => {
+        base.writeFile(p, d);
+        // Simulate pi's own refresh persisting right after ours: its rewrite
+        // lands after our write but before the lost-update check.
+        if (!simulated && norm(p) === AUTH_JSON) {
+          simulated = true;
+          files[AUTH_JSON] = JSON.stringify({
+            anthropic: { type: "api_key", key: "sk-keep" },
+            anthropic2: { type: "oauth", access: "workos:pi" },
+          });
+        }
+      },
+    };
+    await persistOAuthCredential({ access: "workos:new", refresh: "new-rt", expires: 42 }, fs);
+    const saved = JSON.parse(files[AUTH_JSON]);
+    expect(saved.clinepass).toEqual({ type: "oauth", access: "workos:new", refresh: "new-rt", expires: 42 });
+    expect(saved.anthropic).toEqual({ type: "api_key", key: "sk-keep" });
+    // pi's concurrent update must survive our re-merge.
+    expect(saved.anthropic2).toEqual({ type: "oauth", access: "workos:pi" });
+  });
 });
 
 describe("errors", () => {
@@ -74,6 +103,7 @@ describe("errors", () => {
   });
   it("classifies free-model 403 as free_route_forbidden, paid 403 as not_subscribed", () => {
     expect(classifyClinePassError("HTTP 403 Forbidden", "deepseek/deepseek-v4-flash").type).toBe("free_route_forbidden");
+    expect(classifyClinePassError("HTTP 403 Forbidden", "cline-free/longcat-2.0").type).toBe("free_route_forbidden");
     expect(classifyClinePassError("HTTP 403 Forbidden", "cline-pass/kimi-k3").type).toBe("not_subscribed");
   });
   it("falls back to unknown", () => {

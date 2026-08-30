@@ -6,6 +6,7 @@ import {
   getActiveToken,
   handleUsageTracking,
   resetUsageTrackingForTest,
+  setUsageTrackingPaused,
   sumSessionEntries,
   type UsageRecord,
 } from "../src/usage.js";
@@ -60,6 +61,7 @@ describe("usage", () => {
           items: [
             {
               id: "usg-1",
+              generationId: "gen-abc",
               aiModelName: "cline-pass/kimi-k3",
               promptTokens: 1000,
               cachedTokens: 800,
@@ -76,6 +78,7 @@ describe("usage", () => {
     expect(records?.[0].costUsd).toBeCloseTo(0.6);
     expect(records?.[0].cachedTokens).toBe(800);
     expect(records?.[0].totalTokens).toBe(1200);
+    expect(records?.[0].generationId).toBe("gen-abc");
   });
 
   it("reads cap thresholds from plan entitlements (micro-USD)", async () => {
@@ -283,6 +286,33 @@ describe("handleUsageTracking logout behavior", () => {
     expect(entries).toHaveLength(0);
     expect(ctx.ui.setStatus).toHaveBeenCalledWith("clinepass-cost", undefined);
   });
+
+  it("suspends tracking while calibration is paused (probe records never leak in)", async () => {
+    const files: Record<string, string> = { [AUTH_JSON]: oauthFixture() };
+    const apiCalls: string[] = [];
+    const fetchFn = vi.fn().mockImplementation(async (url: string | URL | Request) => {
+      apiCalls.push(String(url));
+      return JSON_RESPONSE({ items: [] });
+    });
+    const options = makeFilesystem(files, fetchFn);
+    const entries: unknown[] = [];
+    const ctx = {
+      model: { provider: "clinepass", id: "cline-pass/kimi-k3" },
+      ui: { setStatus: vi.fn() },
+    };
+
+    setUsageTrackingPaused(true);
+    await handleUsageTracking(
+      { message: { role: "assistant", provider: "clinepass", model: "cline-pass/kimi-k3" } },
+      ctx,
+      (u) => entries.push(u),
+      options,
+    );
+
+    expect(entries).toHaveLength(0);
+    expect(apiCalls).toHaveLength(0);
+    expect(ctx.ui.setStatus).toHaveBeenCalledWith("clinepass-cost", undefined);
+  });
 });
 
 describe("adoptUsageRecord", () => {
@@ -300,6 +330,16 @@ describe("adoptUsageRecord", () => {
   it("skips stale records from before the turn started", () => {
     const stale = [rec("usg-old", "cline-pass/kimi-k3", 10 * 60_000)];
     expect(adoptUsageRecord(stale, Date.now(), "cline-pass/kimi-k3")).toBeUndefined();
+  });
+
+  it("rejects records created after the turn ended (a later turn's record)", () => {
+    const later = [rec("usg-next", "cline-pass/kimi-k3", -30_000)];
+    expect(adoptUsageRecord(later, Date.now(), "cline-pass/kimi-k3")).toBeUndefined();
+  });
+
+  it("allows small clock skew after the turn when matching the fresh record", () => {
+    const skewed = [rec("usg-skew", "cline-pass/kimi-k3", -5_000)];
+    expect(adoptUsageRecord(skewed, Date.now(), "cline-pass/kimi-k3")?.id).toBe("usg-skew");
   });
 
   it("parses real paid usage: aiModelName is the catalog id, raw_model is vendor path", async () => {
@@ -376,5 +416,62 @@ describe("sumSessionEntries", () => {
 
   it("falls back to zero when no entries are available", () => {
     expect(sumSessionEntries(undefined)).toBe(0);
+  });
+});
+
+describe("turn accumulation", () => {
+  it("adds every record of the turn and resets at the next user message", async () => {
+    const pool: Array<Record<string, unknown>> = [];
+    const fetchFn = vi.fn().mockImplementation(async (url: string | URL | Request) => {
+      if (String(url).includes("/users/me")) return JSON_RESPONSE({ id: "usr-1" });
+      if (String(url).includes("/usages")) return JSON_RESPONSE({ items: [...pool].reverse() }); // newest-first
+      return JSON_RESPONSE({});
+    });
+    const options = makeFilesystem({ [AUTH_JSON]: oauthFixture() }, fetchFn);
+    const entries: unknown[] = [];
+    const ctx = {
+      model: { provider: "clinepass", id: "cline-pass/kimi-k3" },
+      ui: { setStatus: vi.fn() },
+    };
+    const push = (id: string, costUsd: number): void => {
+      pool.push({
+        id,
+        aiModelName: "cline-pass/kimi-k3",
+        promptTokens: 10,
+        cachedTokens: 0,
+        completionTokens: 5,
+        costUsd, // feed unit: 1e-8 USD
+        createdAt: new Date().toISOString(),
+      });
+    };
+    const assistantMsg = { role: "assistant", provider: "clinepass", model: "cline-pass/kimi-k3" };
+
+    // Turn 1: assistant message + one tool-calling round (second record).
+    push("usg-1", 4_000_000); // $0.04
+    await handleUsageTracking({ message: assistantMsg }, ctx, (u) => {
+      entries.push(u);
+    }, options);
+    push("usg-2", 6_000_000); // $0.06
+    await handleUsageTracking({ message: assistantMsg }, ctx, (u) => {
+      entries.push(u);
+    }, options);
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
+      "clinepass-cost",
+      expect.stringContaining("Turn: $0.10000"),
+    );
+
+    // Turn 2: the user message resets the accumulator — only the new record.
+    await handleUsageTracking({ message: { role: "user" } }, ctx, (u) => {
+      entries.push(u);
+    }, options);
+    push("usg-3", 1_500_000); // $0.015
+    await handleUsageTracking({ message: assistantMsg }, ctx, (u) => {
+      entries.push(u);
+    }, options);
+    expect(ctx.ui.setStatus).toHaveBeenLastCalledWith(
+      "clinepass-cost",
+      expect.stringContaining("Turn: $0.01500"),
+    );
+    expect(entries).toHaveLength(3);
   });
 });
