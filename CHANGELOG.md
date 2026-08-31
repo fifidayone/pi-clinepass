@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.3 - 2026-08-31
+
+- Corrected model input modalities: `glm-5.3` and `deepseek-v4-flash` are text-only, `mimo-v2.5` and `qwen3.8-max` accept images
+
 ## 0.1.2 - 2026-08-30
 
 - New paid model: `cline-pass/glm-5.3-flash` ($0.15/$0.50/$0.03)
