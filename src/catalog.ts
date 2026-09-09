@@ -102,6 +102,28 @@ const XHIGH_MEDIUM_LOW: ThinkingLevelMap = {
   max: null,
 };
 
+/** Only off/medium/high. Used for solar-pro4. */
+const OFF_MEDIUM_HIGH: ThinkingLevelMap = {
+  off: "none",
+  minimal: null,
+  low: null,
+  medium: "medium",
+  high: "high",
+  xhigh: null,
+  max: null,
+};
+
+/** minimal..xhigh, mandatory (no off, no max). Used for muse-spark contributor. */
+const MANDATORY_NO_MAX: ThinkingLevelMap = {
+  off: null,
+  minimal: "minimal",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "xhigh",
+  max: null,
+};
+
 /**
  * ClinePass rejects the `developer` role; the API caps at `max_tokens` /
  * `max_completion_tokens` with reasoning excluded from the completion cap,
@@ -146,6 +168,8 @@ export const MODELS: readonly ClinePassModel[] = [
   model("z-ai/glm-5.3-flash", "GLM-5.3 Flash", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
   model("deepseek/deepseek-v4-flash", "DeepSeek V4 Flash", [0, 0, 0], 921_600, 131_072, ["text"], MAX_HIGH_LOW),
   model("poolside/laguna-s-2.1:free", "Laguna S-2.1", [0, 0, 0], 262_144, 131_072, ["text"], ALL_THINKING),
+  model("cline-free/solar-pro4", "Solar Pro 4", [0, 0, 0], 524_288, 131_072, ["text"], OFF_MEDIUM_HIGH),
+  model("cline-free/muse-spark-1.3-contributor", "Muse Spark 1.3 Contributor", [0, 0, 0], 921_600, 131_072, ["text", "image"], MANDATORY_NO_MAX),
   // ── ClinePass models (measured billing prices) ─────────────────────────
   model("cline-pass/glm-5.3-flash", "GLM-5.3 Flash", [0.15, 0.5, 0.03], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW_MANDATORY),
   model("cline-pass/glm-5.3", "GLM-5.3", [1.4, 4.4, 0.26], 921_600, 131_072, ["text"], MAX_HIGH_LOW_MANDATORY),

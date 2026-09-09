@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.4 - 2026-09-09
+
+- New free model: `cline-free/solar-pro4` and `cline-free/muse-spark-1.3-contributor`
+
 ## 0.1.3 - 2026-08-31
 
 - Corrected model input modalities: `glm-5.3` and `deepseek-v4-flash` are text-only, `mimo-v2.5` and `qwen3.8-max` accept images

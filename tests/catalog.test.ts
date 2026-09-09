@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { MODELS, isFreeModel, modelIds } from "../src/catalog.js";
 
 describe("catalog", () => {
-  it("has 18 models: 14 paid + 4 free", () => {
-    expect(MODELS).toHaveLength(18);
-    expect(MODELS.filter((m) => m.cost.input === 0)).toHaveLength(4);
+  it("has 20 models: 14 paid + 6 free", () => {
+    expect(MODELS).toHaveLength(20);
+    expect(MODELS.filter((m) => m.cost.input === 0)).toHaveLength(6);
     expect(MODELS.filter((m) => m.cost.input > 0)).toHaveLength(14);
   });
 
@@ -33,6 +33,8 @@ describe("catalog", () => {
     expect(isFreeModel("poolside/laguna-s-2.1:free")).toBe(true);
     expect(isFreeModel("deepseek/deepseek-v4-flash")).toBe(true);
     expect(isFreeModel("cline-free/longcat-2.0")).toBe(true);
+    expect(isFreeModel("cline-free/solar-pro4")).toBe(true);
+    expect(isFreeModel("cline-free/muse-spark-1.3-contributor")).toBe(true);
     expect(isFreeModel("cline-pass/deepseek-v4-flash")).toBe(false);
   });
 
