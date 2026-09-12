@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { MODELS, isFreeModel, modelIds } from "../src/catalog.js";
 
 describe("catalog", () => {
-  it("has 20 models: 14 paid + 6 free", () => {
-    expect(MODELS).toHaveLength(20);
+  it("has 21 models: 15 paid + 6 free", () => {
+    expect(MODELS).toHaveLength(21);
     expect(MODELS.filter((m) => m.cost.input === 0)).toHaveLength(6);
-    expect(MODELS.filter((m) => m.cost.input > 0)).toHaveLength(14);
+    expect(MODELS.filter((m) => m.cost.input > 0)).toHaveLength(15);
   });
 
   it("uses measured billing prices (not published)", () => {

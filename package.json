@@ -1,6 +1,6 @@
 {
   "name": "pi-clinepass",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "ClinePass for pi — static measured-price catalog, server-truth billing meter, free models",
   "keywords": [
     "ai",

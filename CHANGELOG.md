@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.5 - 2026-09-12
+
+- New paid model: `cline-pass/deepseek-v4.1-flash` (measured rates pending calibration)
+
 ## 0.1.4 - 2026-09-09
 
 - New free model: `cline-free/solar-pro4` and `cline-free/muse-spark-1.3-contributor`

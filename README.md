@@ -25,7 +25,7 @@ Dollar-based limits, live cost tracking, and plan cap reporting.
 
 ## Highlights
 
-- **18 Models**: 14 ClinePass models on a dollar-based limit system plus 4 free tier models
+- **22 Models**: 16 ClinePass models on a dollar-based limit system plus 6 free tier models
 - **Live Status Meter**: Per-turn and session cost directly in the pi footer
 - **Plan Utilization**: 5-hour, weekly, and monthly caps tracked via `/clinepass`
 - **Price Calibration**: measure real gateway billing from `/clinepass` to keep displayed prices honest

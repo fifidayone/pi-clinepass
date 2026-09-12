@@ -178,6 +178,7 @@ export const MODELS: readonly ClinePassModel[] = [
   model("cline-pass/kimi-k2.6", "Kimi K2.6", [1.58, 6.67, 0.27], 262_144, 131_072, ["text", "image"], ALL_THINKING),
   model("cline-pass/kimi-k3", "Kimi K3", [6.0, 30.0, 0.6], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
   model("cline-pass/deepseek-v4-pro", "DeepSeek V4 Pro", [1.65, 4.95, 0.06], 921_600, 131_072, ["text"], MAX_HIGH_LOW),
+  model("cline-pass/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", [0.3, 1.2, 0.006], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),
   model("cline-pass/deepseek-v4-flash", "DeepSeek V4 Flash", [0.44, 1.32, 0.014], 921_600, 131_072, ["text"], MAX_HIGH_LOW),
   model("cline-pass/mimo-v2.5", "MiMo-V2.5", [0.14, 0.28, 0.0028], 921_600, 131_072, ["text", "image"], ALL_THINKING),
   model("cline-pass/mimo-v2.5-pro", "MiMo-V2.5-Pro", [0.435, 0.87, 0.0036], 921_600, 131_072, ["text"], ALL_THINKING),

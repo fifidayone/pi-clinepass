@@ -11,7 +11,7 @@
 import { release } from "node:os";
 import { isFreeModel } from "./catalog.js";
 
-const FALLBACK_CLINE_VERSION = "3.0.60";
+const FALLBACK_CLINE_VERSION = "3.0.61";
 const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const NPM_REGISTRY_URL = "https://registry.npmjs.org/cline/latest";
 

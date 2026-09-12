@@ -13,7 +13,7 @@ const makeTui = (rows: number): TUI =>
 
 const paid = MODELS.filter((m) => m.cost.input > 0);
 
-/** 14 rows in catalog order: 4 done, 3 running, the rest queued. */
+/** 15 rows in catalog order: 4 done, 3 running, the rest queued. */
 const progressFixture = (): CalProgress => ({
   done: 4,
   total: paid.length,
@@ -36,21 +36,22 @@ const calView = (rows: number): CalibrationView =>
 const calBody = (lines: string[]): string[] =>
   lines.filter((l) => /^│ *[·…✓✗] [A-Z]/.test(l));
 
-/** The model names the modal shows, left column first then right. */
+/** The model names the modal shows, left column first then right (the last
+ * right cell is empty when the count is odd). */
 const rowNames = (lines: string[]): string[] => {
   const cols = calBody(lines).map((l) => l.slice(2, -2).split(" │ "));
   const strip = (cell: string): string =>
     cell.trim().replace(/^[·…✓✗] /, "").split(/\s{2,}/)[0]!.trimEnd();
-  return [...cols.map((c) => strip(c[0]!)), ...cols.map((c) => strip(c[1]!))];
+  return [...cols.map((c) => strip(c[0]!)), ...cols.map((c) => strip(c[1]!))].filter((n) => n !== "");
 };
 
 describe("CalibrationView layout", () => {
-  it("fills column-major: models 1-7 down the left, 8-14 down the right", () => {
+  it("fills column-major: models 1-8 down the left, 9-15 down the right", () => {
     const view = calView(40);
     view.update(progressFixture());
     const lines = view.render(view.width);
 
-    expect(calBody(lines)).toHaveLength(7);
+    expect(calBody(lines)).toHaveLength(8);
     expect(rowNames(lines)).toEqual(paid.map((m) => m.name));
   });
 
