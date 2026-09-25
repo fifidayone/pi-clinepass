@@ -198,7 +198,7 @@ describe("deriveRates — cache miss (2 turns, cold pair)", () => {
 describe("lowestEffort", () => {
   it("picks the lowest effort each model actually supports", () => {
     expect(lowestEffort(model("cline-pass/kimi-k3"))).toBe("off"); // off → "none"
-    expect(lowestEffort(model("cline-pass/kimi-k2.7-code"))).toBe("minimal"); // mandatory
+    expect(lowestEffort(model("cline-pass/muse-spark-1.3-contributor"))).toBe("minimal"); // mandatory, minimal
     expect(lowestEffort(model("cline-pass/glm-5.3"))).toBe("low"); // mandatory, no minimal
   });
 });

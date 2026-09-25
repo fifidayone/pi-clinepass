@@ -16,6 +16,10 @@ export type ClinePassErrorType =
   | "rate_limited"
   | "free_limit_reached"
   | "free_route_forbidden"
+  | "insufficient_credits"
+  | "model_not_found"
+  | "upstream_error"
+  | "server_error"
   | "unknown";
 
 function matchesAny(text: string, patterns: string[]): boolean {
@@ -35,7 +39,15 @@ export const CLINEPASS_ERROR_MESSAGES: Record<ClinePassErrorType, string> = {
   free_route_forbidden:
     "Free model route unavailable (HTTP 403). The free route is gated to Cline product " +
     "surfaces — retry in a moment, or switch to a ClinePass model.",
-  unknown: "ClinePass request failed. Check your subscription at app.cline.bot or run `pi /login`.",
+  insufficient_credits:
+    "Insufficient Cline credits. Top up your balance at app.cline.bot/credits or switch to a free/subscription model.",
+  model_not_found:
+    "Model not found on Cline gateway (HTTP 404). Run `/model` to select an available model.",
+  upstream_error:
+    "Upstream model provider error. The model host returned an error — retry in a moment, or switch to another model.",
+  server_error:
+    "Cline gateway server error. The service is temporarily unavailable — please retry in a moment.",
+  unknown: "ClinePass request failed. Please check app.cline.bot or try again later.",
 };
 
 /**
@@ -52,23 +64,50 @@ export function classifyClinePassError(
 } {
   const lower = errorMessage.toLowerCase();
 
-  if (matchesAny(lower, ["401", "unauthorized", "invalid api key", "invalid_api_key"])) {
-    return { type: "auth_expired", message: CLINEPASS_ERROR_MESSAGES.auth_expired };
+  // 1. Upstream Provider / Inference host errors:
+  // Must precede auth checks because upstream errors (e.g. OpenRouter/Meta/DeepSeek)
+  // often forward payloads containing "401" or "invalid_api_key" from the host,
+  // which does not mean the user's ClinePass authentication has expired.
+  if (
+    matchesAny(lower, [
+      "provider returned error",
+      "failed to generate stream from openrouter",
+      "openrouter",
+      "inference request failed",
+      "failed to invoke model",
+      "provider_error_code",
+    ])
+  ) {
+    return { type: "upstream_error", message: CLINEPASS_ERROR_MESSAGES.upstream_error };
   }
-  if (matchesAny(lower, ["429", "rate limit", "too many requests", "rate_limit"])) {
-    return { type: "rate_limited", message: CLINEPASS_ERROR_MESSAGES.rate_limited };
+
+  // 2. Insufficient Credits (HTTP 402)
+  if (matchesAny(lower, ["insufficient_credits", "insufficient balance", "buy_credits_url", "402"])) {
+    return { type: "insufficient_credits", message: CLINEPASS_ERROR_MESSAGES.insufficient_credits };
   }
+
+  // 3. Model Not Found (HTTP 404)
+  if (matchesAny(lower, ["model not found", "model_not_found"]) || /\b404\b/.test(lower)) {
+    return { type: "model_not_found", message: CLINEPASS_ERROR_MESSAGES.model_not_found };
+  }
+
+  // 4. Rate Limits & Free limits
   if (matchesAny(lower, ["free limit reached", "free limit", "try again in"])) {
     return { type: "free_limit_reached", message: CLINEPASS_ERROR_MESSAGES.free_limit_reached };
   }
+  if (matchesAny(lower, ["rate limit", "too many requests", "rate_limit"]) || /\b429\b/.test(lower)) {
+    return { type: "rate_limited", message: CLINEPASS_ERROR_MESSAGES.rate_limited };
+  }
+
+  // 5. Subscription & Route Access (HTTP 403)
   if (
     matchesAny(lower, [
-      "403",
-      "forbidden",
       "subscription required",
       "not subscribed",
       "organization accounts cannot use",
-    ])
+      "forbidden",
+    ]) ||
+    /\b403\b/.test(lower)
   ) {
     // Every free-tier route is gated to Cline product surfaces — a 403 on a
     // free model is a route-gate rejection, not a subscription problem.
@@ -77,6 +116,28 @@ export function classifyClinePassError(
     }
     return { type: "not_subscribed", message: CLINEPASS_ERROR_MESSAGES.not_subscribed };
   }
+
+  // 6. Gateway / Server 5xx Errors
+  if (
+    matchesAny(lower, [
+      "bad gateway",
+      "service unavailable",
+      "gateway timeout",
+      "internal server error",
+    ]) ||
+    /\b(500|502|503|504)\b/.test(lower)
+  ) {
+    return { type: "server_error", message: CLINEPASS_ERROR_MESSAGES.server_error };
+  }
+
+  // 7. Client Authentication (genuine 401 / unauthorized from Cline gateway)
+  if (
+    matchesAny(lower, ["unauthorized", "invalid api key", "invalid_api_key"]) ||
+    /\b401\b/.test(lower)
+  ) {
+    return { type: "auth_expired", message: CLINEPASS_ERROR_MESSAGES.auth_expired };
+  }
+
   return { type: "unknown", message: CLINEPASS_ERROR_MESSAGES.unknown };
 }
 

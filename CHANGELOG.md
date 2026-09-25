@@ -2,9 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.1.5 - 2026-09-12
+## 0.1.6 - 2026-09-25
 
-- New paid model: `cline-pass/deepseek-v4.1-flash` (measured rates pending calibration)
+- New free models: `cline-free/gemini-3.8-flash` (mandatory low/medium/high reasoning), `stealth/space-bunny-alpha`, `cline-free/mimo-v2.6-flash`, and `cline-free/deepseek-v4.1-flash`
+- New paid model: `cline-pass/muse-spark-1.3-contributor` ($0.10/$0.20/$0.01)
+- Retired models removed from catalog
+- Error classification refined: upstream provider errors, 402 (insufficient credits), 404 (model not found), and 5xx gateway errors no longer misclassified as expired auth
+- Free-route client headers updated to latest CLI convention
 
 ## 0.1.4 - 2026-09-09
 

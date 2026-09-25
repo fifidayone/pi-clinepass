@@ -102,9 +102,30 @@ describe("errors", () => {
     expect(classifyClinePassError("HTTP 403: free limit reached").type).toBe("free_limit_reached");
   });
   it("classifies free-model 403 as free_route_forbidden, paid 403 as not_subscribed", () => {
-    expect(classifyClinePassError("HTTP 403 Forbidden", "deepseek/deepseek-v4-flash").type).toBe("free_route_forbidden");
-    expect(classifyClinePassError("HTTP 403 Forbidden", "cline-free/longcat-2.0").type).toBe("free_route_forbidden");
+    expect(classifyClinePassError("HTTP 403 Forbidden", "cline-free/deepseek-v4.1-flash").type).toBe("free_route_forbidden");
+    expect(classifyClinePassError("HTTP 403 Forbidden", "stealth/space-bunny-alpha").type).toBe("free_route_forbidden");
     expect(classifyClinePassError("HTTP 403 Forbidden", "cline-pass/kimi-k3").type).toBe("not_subscribed");
+  });
+  it("classifies upstream provider errors containing 401 or invalid_api_key as upstream_error, not auth_expired", () => {
+    const upstreamError =
+      'Failed to create stream: inference request failed: failed to generate stream from OpenRouter: failed to invoke model with streaming: request failed with status 401: {"error":{"message":"Provider returned error","code":401,"metadata":{"raw":"{\\"error\\":{\\"code\\":\\"invalid_api_key\\"}}"}}}';
+    const result = classifyClinePassError(upstreamError);
+    expect(result.type).toBe("upstream_error");
+    expect(result.message).not.toContain("Run `pi /login`");
+  });
+  it("classifies insufficient credits as insufficient_credits", () => {
+    const r = classifyClinePassError('402: {"code":"insufficient_credits","message":"Insufficient balance"}');
+    expect(r.type).toBe("insufficient_credits");
+  });
+  it("classifies model not found as model_not_found", () => {
+    expect(classifyClinePassError('404 "model not found"').type).toBe("model_not_found");
+  });
+  it("classifies gateway 5xx as server_error", () => {
+    expect(classifyClinePassError("502 Bad Gateway").type).toBe("server_error");
+    expect(classifyClinePassError("503 Service Unavailable").type).toBe("server_error");
+  });
+  it("does not match non-401 numbers as auth_expired", () => {
+    expect(classifyClinePassError("error code 4012").type).toBe("unknown");
   });
   it("falls back to unknown", () => {
     expect(classifyClinePassError("weird upstream issue").type).toBe("unknown");

@@ -11,7 +11,7 @@
 import { release } from "node:os";
 import { isFreeModel } from "./catalog.js";
 
-const FALLBACK_CLINE_VERSION = "3.0.61";
+const FALLBACK_CLINE_VERSION = "3.0.65";
 const VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const NPM_REGISTRY_URL = "https://registry.npmjs.org/cline/latest";
 
@@ -73,11 +73,14 @@ export function needsFreeModelHeaders(modelId: string): boolean {
 export function buildFreeModelHeadersSync(): Record<string, string> {
   const version = cachedVersion ?? FALLBACK_CLINE_VERSION;
   return {
-    "x-client-type": "cli",
-    "x-client-version": version,
-    "x-core-version": version,
-    "x-platform": process.platform,
-    "x-platform-version": release(),
-    "user-agent": `Cline/${version}`,
+    "HTTP-Referer": "https://cline.bot",
+    "X-Title": "Cline",
+    "X-IS-MULTIROOT": "false",
+    "X-CLIENT-TYPE": "cline-cli",
+    "X-CLIENT-VERSION": version,
+    "X-CORE-VERSION": version,
+    "X-PLATFORM": process.platform,
+    "X-PLATFORM-VERSION": release(),
+    "User-Agent": `Cline/${version}`,
   };
 }

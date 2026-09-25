@@ -82,8 +82,8 @@ describe("displayName", () => {
   });
 
   it("marks free models as (free)", () => {
-    const free = MODELS.find((m) => m.id === "cline-free/longcat-2.0")!;
-    expect(displayName(free)).toBe("LongCat 2.0 (free)");
+    const free = MODELS.find((m) => m.id === "cline-free/deepseek-v4.1-flash")!;
+    expect(displayName(free)).toBe("DeepSeek V4.1 Flash (free)");
   });
 
   it("formats small rates without trailing zeros", () => {

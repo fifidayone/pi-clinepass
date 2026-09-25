@@ -46,12 +46,12 @@ const rowNames = (lines: string[]): string[] => {
 };
 
 describe("CalibrationView layout", () => {
-  it("fills column-major: models 1-8 down the left, 9-15 down the right", () => {
+  it("fills column-major: models 1-6 down the left, 7-12 down the right", () => {
     const view = calView(40);
     view.update(progressFixture());
     const lines = view.render(view.width);
 
-    expect(calBody(lines)).toHaveLength(8);
+    expect(calBody(lines)).toHaveLength(6);
     expect(rowNames(lines)).toEqual(paid.map((m) => m.name));
   });
 
@@ -97,7 +97,7 @@ describe("CalibrationView layout", () => {
     const body = calBody(lines);
 
     expect(lines.some((l) => l.includes("done above"))).toBe(true);
-    expect(body[0]).toContain("Kimi K2.6"); // rows[4] — first non-done
+    expect(body[0]).toContain("DeepSeek V4.1 Flash"); // rows[4] — first non-done
     expect(body).toHaveLength(6); // the row budget at 16 terminal rows
   });
 

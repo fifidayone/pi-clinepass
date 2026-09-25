@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { getClineVersion } from "../src/headers.js";
+import { buildFreeModelHeadersSync, getClineVersion } from "../src/headers.js";
 
 /** Bundled fallback in src/headers.ts (not exported) — used when the registry
  * response is unusable. */
-const FALLBACK_VERSION = "3.0.61";
+const FALLBACK_VERSION = "3.0.65";
 
 const JSON_RESPONSE = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -25,5 +25,19 @@ describe("getClineVersion", () => {
     // Valid version is cached: the second call must not refetch.
     await expect(getClineVersion(fetchFn)).resolves.toBe("9.9.9");
     expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildFreeModelHeadersSync", () => {
+  it("builds the exact headers matching Cline CLI 3.0.65 convention", () => {
+    const headers = buildFreeModelHeadersSync();
+    expect(headers["HTTP-Referer"]).toBe("https://cline.bot");
+    expect(headers["X-Title"]).toBe("Cline");
+    expect(headers["X-IS-MULTIROOT"]).toBe("false");
+    expect(headers["X-CLIENT-TYPE"]).toBe("cline-cli");
+    expect(headers["X-CLIENT-VERSION"]).toBeDefined();
+    expect(headers["X-CORE-VERSION"]).toBeDefined();
+    expect(headers["X-PLATFORM"]).toBe(process.platform);
+    expect(headers["User-Agent"]).toContain("Cline/");
   });
 });
