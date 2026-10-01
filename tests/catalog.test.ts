@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { MODELS, isFreeModel, modelIds } from "../src/catalog.js";
 
 describe("catalog", () => {
-  it("has 17 models: 12 paid + 5 free", () => {
-    expect(MODELS).toHaveLength(17);
-    expect(MODELS.filter((m) => m.cost.input === 0)).toHaveLength(5);
+  it("has 16 models: 12 paid + 4 free", () => {
+    expect(MODELS).toHaveLength(16);
+    expect(MODELS.filter((m) => m.cost.input === 0)).toHaveLength(4);
     expect(MODELS.filter((m) => m.cost.input > 0)).toHaveLength(12);
   });
 
@@ -29,8 +29,6 @@ describe("catalog", () => {
   });
 
   it("marks free models correctly", () => {
-    expect(isFreeModel("cline-free/gemini-3.8-flash")).toBe(true);
-    expect(isFreeModel("clinepass/cline-free/gemini-3.8-flash")).toBe(true);
     expect(isFreeModel("cline-free/deepseek-v4.1-flash")).toBe(true);
     expect(isFreeModel("clinepass/cline-free/deepseek-v4.1-flash")).toBe(true);
     expect(isFreeModel("stealth/space-bunny-alpha")).toBe(true);
@@ -48,16 +46,9 @@ describe("catalog", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("glm-5.3-flash and gemini-3.8-flash disable off thinking; others map off → none", () => {
+  it("glm-5.3-flash disables off thinking; others map off → none", () => {
     const flash = MODELS.find((m) => m.id === "cline-pass/glm-5.3-flash");
     expect(flash?.thinkingLevelMap.off).toBeNull();
-    const gemini = MODELS.find((m) => m.id === "cline-free/gemini-3.8-flash");
-    expect(gemini?.thinkingLevelMap.off).toBeNull();
-    expect(gemini?.thinkingLevelMap.minimal).toBeNull();
-    expect(gemini?.thinkingLevelMap.low).toBe("low");
-    expect(gemini?.thinkingLevelMap.medium).toBe("medium");
-    expect(gemini?.thinkingLevelMap.high).toBe("high");
-    expect(gemini?.thinkingLevelMap.max).toBeNull();
     const plus = MODELS.find((m) => m.id === "cline-pass/qwen3.7-plus");
     expect(plus?.thinkingLevelMap.off).toBe("none");
     expect(plus?.thinkingLevelMap.max).toBe("max");

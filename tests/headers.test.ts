@@ -3,7 +3,7 @@ import { buildFreeModelHeadersSync, getClineVersion } from "../src/headers.js";
 
 /** Bundled fallback in src/headers.ts (not exported) — used when the registry
  * response is unusable. */
-const FALLBACK_VERSION = "3.0.65";
+const FALLBACK_VERSION = "3.0.67";
 
 const JSON_RESPONSE = (body: unknown): Response =>
   new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });

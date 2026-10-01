@@ -102,17 +102,6 @@ const XHIGH_MEDIUM_LOW: ThinkingLevelMap = {
   max: null,
 };
 
-/** Only low/medium/high, mandatory (no off). Used for gemini-3.8-flash. */
-const LOW_MEDIUM_HIGH_MANDATORY: ThinkingLevelMap = {
-  off: null,
-  minimal: null,
-  low: "low",
-  medium: "medium",
-  high: "high",
-  xhigh: null,
-  max: null,
-};
-
 /** Only off/medium/high. Used for solar-pro4. */
 const OFF_MEDIUM_HIGH: ThinkingLevelMap = {
   off: "none",
@@ -175,7 +164,6 @@ function model(
 /** Measured prices ($/1M tokens: input/output/cacheRead) — latest verified. */
 export const MODELS: readonly ClinePassModel[] = [
   // ── Free models (Cline free tier, cost 0) ──────────────────────────────
-  model("cline-free/gemini-3.8-flash", "Gemini 3.8 Flash", [0, 0, 0], 921_600, 65_536, ["text", "image"], LOW_MEDIUM_HIGH_MANDATORY),
   model("stealth/space-bunny-alpha", "Space Bunny Alpha", [0, 0, 0], 921_600, 131_072, ["text", "image"], ALL_THINKING),
   model("cline-free/mimo-v2.6-flash", "MiMo-V2.6-Flash", [0, 0, 0], 921_600, 131_072, ["text", "image"], ALL_THINKING),
   model("cline-free/deepseek-v4.1-flash", "DeepSeek V4.1 Flash", [0, 0, 0], 921_600, 131_072, ["text", "image"], MAX_HIGH_LOW),

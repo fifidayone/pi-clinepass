@@ -2,7 +2,7 @@
  * pi-clinepass — ClinePass for pi.
  *
  * Registers the `clinepass` provider (12 paid models with measured billing
- * prices + 5 free models) and wires the hooks that keep pi's numbers real:
+ * prices + 4 free models) and wires the hooks that keep pi's numbers real:
  *   - message_end → server-truth cost meter + session total + error surface + thinking repair
  *   - before_provider_headers → free-route Cline-CLI headers
  *   - model_select / session_start → immediate meter + default model sync

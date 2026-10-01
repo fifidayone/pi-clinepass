@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.7 - 2026-10-01
+
+- Retired model removed: `cline-free/gemini-3.8-flash` (dropped from the gateway's free tier)
+- Free-route client headers track the latest CLI release
+
 ## 0.1.6 - 2026-09-25
 
 - New free models: `cline-free/gemini-3.8-flash` (mandatory low/medium/high reasoning), `stealth/space-bunny-alpha`, `cline-free/mimo-v2.6-flash`, and `cline-free/deepseek-v4.1-flash`
